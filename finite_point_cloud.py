@@ -4,6 +4,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from scipy.constants import physical_constants
 from scipy.special import logsumexp
+from GrAMPLE import GrAMPLE
 
 # Entry point is on line 147
 
@@ -45,7 +46,8 @@ def get_distance_matrix(points):
             
     return distance_matrix
 
-def potential_energy(points, cutoff, zero = 0, onebody = 1.0, two_body_init = 1.0, two_body_decay = -2., show_potential = False):
+
+def potential_energy(points, cutoff, zero = 0, onebody = -1.0, two_body_init = 1.0, two_body_decay = -2., show_potential = False):
     """
     Calculate the potential energy of a system of points in a cubic box.
 
@@ -75,8 +77,11 @@ def potential_energy(points, cutoff, zero = 0, onebody = 1.0, two_body_init = 1.
     flattened = np.tril(get_distance_matrix(points)).flatten()
     flattened = flattened[flattened > 0]  # Remove zero distances
 
+    grAMPLE = GrAMPLE()  # Initialize the GrAMPLE model
+
     one_body_terms = onebody * len(points)  # One-body potential energy term
-    two_body_terms = potential(flattened)  # Two-body potential energy terms
+    #two_body_terms = potential(flattened)  # Two-body potential energy terms
+    two_body_terms = grAMPLE.get_energy(flattened)
 
     E = one_body_terms + np.sum(two_body_terms)
 
@@ -92,12 +97,13 @@ def potential_energy(points, cutoff, zero = 0, onebody = 1.0, two_body_init = 1.
 def logsumexp2(x):
     """
     Compute the log-sum-exp of an array for numerical stability.
-
+    Abstracted for better parallelisation.
+    
     Parameters:
     x (np.ndarray): Input array.
 
     Returns:
-    float: The log-sum-exp of the input array.
+    float: The logarithm of the sum of exponentials of the input array.
     """
     c = x.max()
     return c + np.log(np.sum(np.exp(x - c)))
@@ -113,7 +119,7 @@ def canonical_partition_function(energies, temperature):
     temperature (float): The temperature in Kelvin.
 
     Returns:
-    float: The canonical partition function and the Boltzmann probabilities.
+    tuple[np.ndarray, np.ndarray]: A tuple containing the partition function Z and the probabilities P for each energy.
     """
     # energies = energies/10000
     B = 1 / (k_B * temperature)
@@ -148,11 +154,11 @@ def canonical_heat_capacity(energies, probabilities, temperature):
 ### ENTRY POINT ###
 """ Could be argparsed but I can't be argparsed to do that right now. """
 
-num_systems = 5000  # Number of times to run the simulation
+num_systems = 2000  # Number of times to run the simulation
 num_particles = 40  # Number of particles in each system
 max_temp = 15000.0  # Maximum temperature in Kelvin
 
-force_linearity = True  # Force the energies to be linear for numerical stability
+force_linearity = False
 
 ###################
 
@@ -178,14 +184,13 @@ ax.plot(T, Cv, label='Heat Capacity')
 ax.set_xlabel('Temperature (K)')
 ax.set_ylabel('Heat Capacity (ev / K / particle)')
 ax.set_title('Canonical Heat Capacity vs Temperature')
-ax.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(np.arange(len(energies)), np.sort(energies), label='Heat Capacity', color='orange')
 ax2.set_xlabel('Ranking')
 ax2.set_ylabel('Energy (eV) per particle')
 fig.suptitle('Canonical Heat Capacity and Energy Distribution')
 fig.tight_layout()
-fig.savefig('heat_capacity.pdf', dpi=300)
+fig.savefig('heat_capacity_polyfit_GRAMPLE.pdf', dpi=300)
 
 
 
