@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.constants import physical_constants
 from scipy.special import logsumexp
 from GrAMPLE import GrAMPLE
+import argparse
 
 # Entry point is on line 147
 
@@ -47,7 +48,7 @@ def get_distance_matrix(points):
     return distance_matrix
 
 
-def potential_energy(points, cutoff, zero = 0, onebody = -1.0, two_body_init = 1.0, two_body_decay = -2., show_potential = False):
+def potential_energy(points, choice, cutoff, zero = 0, onebody = -1.0, two_body_init = 1.0, two_body_decay = -2., show_potential = False):
     """
     Calculate the potential energy of a system of points in a cubic box.
 
@@ -59,18 +60,14 @@ def potential_energy(points, cutoff, zero = 0, onebody = -1.0, two_body_init = 1
     float: The total potential energy of the system.
     """
 
-    def potential(d):
-        """
-        Calculate the potential energy for a given distance.
-
-        Parameters:
-        d (float): The distance between two points.
-
-        Returns:
-        float: The potential energy for the given distance.
-        """
-        # return two_body_init * np.exp(two_body_decay * d)
+    def potential_reciprocal(d):
         return 1/(np.power(d, two_body_decay))
+    
+    def potential_exponential(d):
+        return two_body_init * np.exp(two_body_decay * d)
+    
+    def potential_grample(d, grample):
+        return grample.get_energy(d)
 
         
     E = 0.0
@@ -81,7 +78,17 @@ def potential_energy(points, cutoff, zero = 0, onebody = -1.0, two_body_init = 1
 
     one_body_terms = onebody * len(points)  # One-body potential energy term
     #two_body_terms = potential(flattened)  # Two-body potential energy terms
-    two_body_terms = grAMPLE.get_energy(flattened)
+
+    if choice == "exponential":
+        potential = potential_exponential
+    elif choice == "reciprocal":
+        potential = potential_reciprocal
+    elif choice == "grample":
+        potential = lambda d: potential_grample(d, grAMPLE)
+
+
+
+    two_body_terms = potential(flattened)
 
     E = one_body_terms + np.sum(two_body_terms)
 
@@ -151,21 +158,23 @@ def canonical_heat_capacity(energies, probabilities, temperature):
     heat_capacity = fluctuations / -(k_B * np.power(temperature, 2))
     return heat_capacity
 
-### ENTRY POINT ###
-""" Could be argparsed but I can't be argparsed to do that right now. """
+arg = argparse.ArgumentParser(description="Calculate canonical heat capacity and energy distribution.")
+arg.add_argument('--systems', "-s", type=int, default=2000, help='Number of systems to run the simulation')
+arg.add_argument('--particles', "-p", type=int, default=40, help='Number of particles in each system')
+arg.add_argument('--max_temp', "-t", type=float, default=15000.0, help='Maximum temperature in Kelvin')
+arg.add_argument('--force_linearity', "-l", action='store_true', help='Force linearity in energy distribution for numerical stability')
+arg.add_argument('--potential', type=str, default="grample", choices=["exponential", "reciprocal", "grample"], help='Type of potential to use: "exponential", "reciprocal" or "grample"')
+args = arg.parse_args()
 
-num_systems = 2000  # Number of times to run the simulation
-num_particles = 40  # Number of particles in each system
-max_temp = 15000.0  # Maximum temperature in Kelvin
-
-force_linearity = False
-
-###################
+num_systems = args.systems  # Number of systems to run the simulation
+num_particles = args.particles  # Number of particles in each system
+max_temp = args.max_temp  # Maximum temperature in Kelvin
+force_linearity = args.force_linearity  # Force linearity in energy distribution for numerical stability
 
 energies = np.zeros(num_systems)
 for idx in tqdm(range(num_systems)):
     points = finite_point_cloud(15.0, num_particles)
-    energies[idx] = potential_energy(points, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-.5, show_potential=False)/num_particles
+    energies[idx] = potential_energy(points, choice = args.potential, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-2., show_potential=False)/num_particles
 
 if force_linearity == True:
     energies = np.linspace(np.min(energies), np.max(energies), num_systems)  # Normalize energies for better numerical stability
@@ -190,7 +199,7 @@ ax2.set_xlabel('Ranking')
 ax2.set_ylabel('Energy (eV) per particle')
 fig.suptitle('Canonical Heat Capacity and Energy Distribution')
 fig.tight_layout()
-fig.savefig('heat_capacity_polyfit_GRAMPLE.pdf', dpi=300)
+fig.savefig('heat_capacity_polyfit_GRAMPLE.pdf', dpi=300, bbox_inches='tight')
 
 
 
