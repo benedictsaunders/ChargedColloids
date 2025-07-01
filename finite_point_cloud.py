@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from scipy.constants import physical_constants
 from scipy.special import logsumexp
 
+# Entry point is on line 147
+
 k_B = physical_constants["Boltzmann constant in eV/K"][0]  # Boltzmann constant in eV/K
 
 @njit(parallel=True)
@@ -21,6 +23,7 @@ def finite_point_cloud(box_size, num_points):
     """
     return np.random.uniform(0, box_size, size=(num_points, 3))
 
+@njit(parallel=True)
 def get_distance_matrix(points):
     """
     Calculate the distance matrix for a set of points.
@@ -34,8 +37,8 @@ def get_distance_matrix(points):
     num_points = points.shape[0]
     distance_matrix = np.zeros((num_points, num_points), dtype=np.float64)
     
-    for i in tqdm(range(num_points), desc="Calculating distance matrix", leave=False):
-        for j in range(i + 1, num_points):
+    for i in np.arange(num_points):
+        for j in np.arange(i + 1, num_points):
             dist = np.linalg.norm(points[i] - points[j])
             distance_matrix[i, j] = dist
             distance_matrix[j, i] = dist
@@ -119,6 +122,7 @@ def canonical_partition_function(energies, temperature):
     Z, P = np.exp(lnZ), np.exp(w - lnZ)
     return Z, P
 
+@njit(parallel=True)
 def canonical_heat_capacity(energies, probabilities, temperature):
     """
     Calculate the canonical heat capacity for a set of energies and their probabilities at a given temperature.
@@ -141,22 +145,31 @@ def canonical_heat_capacity(energies, probabilities, temperature):
     heat_capacity = fluctuations / -(k_B * np.power(temperature, 2))
     return heat_capacity
 
+### ENTRY POINT ###
+""" Could be argparsed but I can't be argparsed to do that right now. """
+
 num_systems = 5000  # Number of times to run the simulation
 num_particles = 40  # Number of particles in each system
+max_temp = 15000.0  # Maximum temperature in Kelvin
+
+force_linearity = True  # Force the energies to be linear for numerical stability
+
+###################
 
 energies = np.zeros(num_systems)
 for idx in tqdm(range(num_systems)):
     points = finite_point_cloud(15.0, num_particles)
     energies[idx] = potential_energy(points, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-.5, show_potential=False)/num_particles
 
+if force_linearity == True:
+    energies = np.linspace(np.min(energies), np.max(energies), num_systems)  # Normalize energies for better numerical stability
+
 # Define a range of temperatures for the simulation
-T = np.linspace(0.1, 15000.0, 500)  #
+T = np.linspace(0.1, max_temp, 500)
 Cv = np.zeros(len(T))
 
 for idx, t in tqdm(enumerate(T), desc="Calculating heat capacity", total=len(T)):
-    #print(energies)
     Z, P = canonical_partition_function(energies, temperature=t)
-    #print(f"Partition function Z at T={t} K: {Z}")
     Cv[idx] = canonical_heat_capacity(energies, P, temperature=t)
 
 fig = plt.figure()
@@ -165,17 +178,14 @@ ax.plot(T, Cv, label='Heat Capacity')
 ax.set_xlabel('Temperature (K)')
 ax.set_ylabel('Heat Capacity (ev / K / particle)')
 ax.set_title('Canonical Heat Capacity vs Temperature')
-ax.legend()
+ax.set_yscale('log')
 ax2 = fig.add_subplot(212)
 ax2.plot(np.arange(len(energies)), np.sort(energies), label='Heat Capacity', color='orange')
 ax2.set_xlabel('Ranking')
 ax2.set_ylabel('Energy (eV) per particle')
-
 fig.suptitle('Canonical Heat Capacity and Energy Distribution')
 fig.tight_layout()
-
 fig.savefig('heat_capacity.pdf', dpi=300)
-plt.show()
 
 
 
