@@ -12,6 +12,14 @@ import argparse
 k_B = physical_constants["Boltzmann constant in eV/K"][0]  # Boltzmann constant in eV/K
 
 @njit(parallel=True)
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+@njit(parallel=True)
+def logit(x):
+    return np.log(x / (1 - x))
+
+@njit(parallel=True)
 def finite_point_cloud(box_size, num_points):
     """
     Generate a finite point cloud within a cubic box of given size.
@@ -158,17 +166,19 @@ def canonical_heat_capacity(energies, probabilities, temperature):
     U = np.dot(energies, probabilities)
     
     # Fluctuations in energy
-    fluctuations = np.dot(np.power(energies, 2), probabilities) + np.power(U, 2)
+    fluctuations = -np.dot(np.power(energies, 2), probabilities) + np.power(U, 2)
     # Heat capacity formula
-    heat_capacity = fluctuations / (k_B * np.power(temperature, 2))
+    heat_capacity = fluctuations / (-k_B * np.power(temperature, 2))
     return heat_capacity
 
 arg = argparse.ArgumentParser(description="Calculate canonical heat capacity and energy distribution.")
 arg.add_argument('--systems', "-s", type=int, default=2000, help='Number of systems to run the simulation')
 arg.add_argument('--particles', "-p", type=int, default=40, help='Number of particles in each system')
-arg.add_argument('--max_temp', "-t", type=float, default=100000.0, help='Maximum temperature in Kelvin')
+arg.add_argument('--max_temp', "-t", type=float, default=500.0, help='Maximum temperature in Kelvin')
 arg.add_argument('--force_linearity', "-l", action='store_true', help='Force linearity in energy distribution for numerical stability')
 arg.add_argument('--potential', type=str, default="grample", choices=["exponential", "reciprocal", "grample"], help='Type of potential to use: "exponential", "reciprocal" or "grample"')
+arg.add_argument('--show_potential', action='store_true', help='Show the potential energy distribution plot')
+arg.add_argument('--ranking', '-r', type=str, default="None", choices=["None", "Linear", "Logit", "Sigmoid"], help='Ranking method for energy distribution: "None", "Linear", "Logit" or "Sigmoid"')
 args = arg.parse_args()
 
 num_systems = args.systems  # Number of systems to run the simulation
@@ -176,16 +186,22 @@ num_particles = args.particles  # Number of particles in each system
 max_temp = args.max_temp  # Maximum temperature in Kelvin
 force_linearity = args.force_linearity  # Force linearity in energy distribution for numerical stability
 
-energies = np.zeros(num_systems)
-for idx in tqdm(range(num_systems)):
-    points = finite_point_cloud(15.0, num_particles)
-    energies[idx] = potential_energy(points, choice = args.potential, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-2., show_potential=False)/num_particles
-
 #energies = np.array([1.]*1000 + [2.]*1000)# + [3.]*1000 + [4.]*1000 + [5.] * 1000)
   # Simulated energies for testing purposes
-print(energies)
-if force_linearity == True:
-    energies = np.linspace(0, 20, num_systems)  # Normalize energies for better numerical stability
+if args.ranking != "None":
+    print(f"Ranking energies with method: {args.ranking}. Model will not be point cloud based.")
+    if args.ranking == "Linear":
+        energies = np.linspace(0.1, 20, num_systems)
+    elif args.ranking == "Logit":
+        energies = logit(np.linspace(-1., 1., num_systems))
+    elif args.ranking == "Sigmoid":
+        energies = sigmoid(np.linspace(0.1, 0.9, num_systems))
+else:
+    energies = np.zeros(num_systems)
+    for idx in tqdm(range(num_systems)):
+        points = finite_point_cloud(10.0, num_particles)
+        energies[idx] = potential_energy(points, choice = args.potential, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-2., show_potential=False)/num_particles
+
 
 # Define a range of temperatures for the simulation
 T = np.linspace(0.0001, max_temp, 2500)
