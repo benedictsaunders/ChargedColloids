@@ -42,6 +42,7 @@ def get_distance_matrix(points):
     for i in np.arange(num_points):
         for j in np.arange(i + 1, num_points):
             dist = np.linalg.norm(points[i] - points[j])
+            # Only one of these is not necessary, but I can't remember which is the upper or lower triangle.
             distance_matrix[i, j] = dist
             distance_matrix[j, i] = dist
             
@@ -132,7 +133,11 @@ def canonical_partition_function(energies, temperature):
     B = 1 / (k_B * temperature)
     w = -(energies*B)
     lnZ = logsumexp2(w)  # Log-sum-exp for numerical stability
-    Z, P = np.exp(lnZ), np.exp(w - lnZ)
+
+    # Z = np.sum(np.exp(w))
+    # print(Z)
+    Z = np.exp(lnZ)
+    P = np.exp(w - lnZ)
     return Z, P
 
 @njit(parallel=True)
@@ -153,15 +158,15 @@ def canonical_heat_capacity(energies, probabilities, temperature):
     U = np.dot(energies, probabilities)
     
     # Fluctuations in energy
-    fluctuations = -np.dot(np.power(energies, 2), probabilities) + np.power(U, 2)
+    fluctuations = np.dot(np.power(energies, 2), probabilities) + np.power(U, 2)
     # Heat capacity formula
-    heat_capacity = fluctuations / -(k_B * np.power(temperature, 2))
+    heat_capacity = fluctuations / (k_B * np.power(temperature, 2))
     return heat_capacity
 
 arg = argparse.ArgumentParser(description="Calculate canonical heat capacity and energy distribution.")
 arg.add_argument('--systems', "-s", type=int, default=2000, help='Number of systems to run the simulation')
 arg.add_argument('--particles', "-p", type=int, default=40, help='Number of particles in each system')
-arg.add_argument('--max_temp', "-t", type=float, default=15000.0, help='Maximum temperature in Kelvin')
+arg.add_argument('--max_temp', "-t", type=float, default=100000.0, help='Maximum temperature in Kelvin')
 arg.add_argument('--force_linearity', "-l", action='store_true', help='Force linearity in energy distribution for numerical stability')
 arg.add_argument('--potential', type=str, default="grample", choices=["exponential", "reciprocal", "grample"], help='Type of potential to use: "exponential", "reciprocal" or "grample"')
 args = arg.parse_args()
@@ -176,11 +181,14 @@ for idx in tqdm(range(num_systems)):
     points = finite_point_cloud(15.0, num_particles)
     energies[idx] = potential_energy(points, choice = args.potential, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-2., show_potential=False)/num_particles
 
+#energies = np.array([1.]*1000 + [2.]*1000)# + [3.]*1000 + [4.]*1000 + [5.] * 1000)
+  # Simulated energies for testing purposes
+print(energies)
 if force_linearity == True:
-    energies = np.linspace(np.min(energies), np.max(energies), num_systems)  # Normalize energies for better numerical stability
+    energies = np.linspace(0, 20, num_systems)  # Normalize energies for better numerical stability
 
 # Define a range of temperatures for the simulation
-T = np.linspace(0.1, max_temp, 500)
+T = np.linspace(0.0001, max_temp, 2500)
 Cv = np.zeros(len(T))
 
 for idx, t in tqdm(enumerate(T), desc="Calculating heat capacity", total=len(T)):
@@ -188,19 +196,25 @@ for idx, t in tqdm(enumerate(T), desc="Calculating heat capacity", total=len(T))
     Cv[idx] = canonical_heat_capacity(energies, P, temperature=t)
 
 fig = plt.figure()
+
 ax = fig.add_subplot(211)
 ax.plot(T, Cv, label='Heat Capacity')
+# ax.hlines(k_B, 0, max_temp, colors='red', linestyles='dashed')
 ax.set_xlabel('Temperature (K)')
 ax.set_ylabel('Heat Capacity (ev / K / particle)')
 ax.set_title('Canonical Heat Capacity vs Temperature')
+#ax.set_yscale('log')
+# ax.set_ylim(-10, np.max(Cv) * 1.1)
+
 ax2 = fig.add_subplot(212)
 ax2.plot(np.arange(len(energies)), np.sort(energies), label='Heat Capacity', color='orange')
 ax2.set_xlabel('Ranking')
 ax2.set_ylabel('Energy (eV) per particle')
-fig.suptitle('Canonical Heat Capacity and Energy Distribution')
-fig.tight_layout()
-fig.savefig('heat_capacity_polyfit_GRAMPLE.pdf', dpi=300, bbox_inches='tight')
 
+fig.suptitle(f'Canonical Heat Capacity and Energy Distribution\nPotential: {args.potential}')
+fig.tight_layout()
+fig.savefig('heat_capacity.pdf', dpi=300, bbox_inches='tight')
+plt.show()
 
 
 
