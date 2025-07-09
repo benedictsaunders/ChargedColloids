@@ -201,10 +201,14 @@ else:
     for idx in tqdm(range(num_systems)):
         points = finite_point_cloud(10.0, num_particles)
         energies[idx] = potential_energy(points, choice = args.potential, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-2., show_potential=False)/num_particles
+#     None
 
+energies = np.array([1.] + [2.]*1000 + [3.]*1000 + [4.]*1000 + [5.] * 1000 + [6.])  # Simulated energies for testing purposes
+#energies = [1,2,3,4,5,6,7,8,9,10,10,10,10,10,10,10,10,10,10,10,11,12,13,14,15,16,17,18,19,20,20,20,20,20,20,20,20,20,20,20,20,20,21,22,23,24,25,26,27,28,29,30,30,30,30,30,30,30,30,30,30,30,31,32,33,34,35,36,37,38,39,40,40,40,40,40,40,40,40,40,40,40,41,42,43,44,45,46,47,48,49,50]
+energies = np.array(energies, dtype=np.float64)  # Convert to numpy array for numerical operations
 
 # Define a range of temperatures for the simulation
-T = np.linspace(0.0001, max_temp, 2500)
+T = np.linspace(0.1, max_temp, 50000)
 Cv = np.zeros(len(T))
 
 for idx, t in tqdm(enumerate(T), desc="Calculating heat capacity", total=len(T)):
