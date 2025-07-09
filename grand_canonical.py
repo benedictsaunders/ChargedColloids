@@ -135,6 +135,6 @@ ax1.legend()
 
 ax2.legend()
 fig.suptitle('Grand Canonical Heat Capacity and Energy Distribution')
-fig.savefig("GCE_small.pdf", bbox_inches="tight")
+#fig.savefig("GCE_small.pdf", bbox_inches="tight")
 plt.tight_layout()
 plt.show()

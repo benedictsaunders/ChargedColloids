@@ -176,9 +176,9 @@ arg.add_argument('--systems', "-s", type=int, default=2000, help='Number of syst
 arg.add_argument('--particles', "-p", type=int, default=40, help='Number of particles in each system')
 arg.add_argument('--max_temp', "-t", type=float, default=500.0, help='Maximum temperature in Kelvin')
 arg.add_argument('--force_linearity', "-l", action='store_true', help='Force linearity in energy distribution for numerical stability')
-arg.add_argument('--potential', type=str, default="grample", choices=["exponential", "reciprocal", "grample"], help='Type of potential to use: "exponential", "reciprocal" or "grample"')
+arg.add_argument('--potential', type=str, default="grample", choices=["exponential", "reciprocal", "grample"], help='Type of potential to use: "exponential", "reciprocal" or "grample"',)
 arg.add_argument('--show_potential', action='store_true', help='Show the potential energy distribution plot')
-arg.add_argument('--ranking', '-r', type=str, default="None", choices=["None", "Linear", "Logit", "Sigmoid"], help='Ranking method for energy distribution: "None", "Linear", "Logit" or "Sigmoid"')
+arg.add_argument('--ranking', '-r', type=str, default="None", help='Ranking method for energy distribution: "None", "Linear", "Logit", Sigmoid", "Step"',)
 args = arg.parse_args()
 
 num_systems = args.systems  # Number of systems to run the simulation
@@ -191,28 +191,26 @@ force_linearity = args.force_linearity  # Force linearity in energy distribution
 if args.ranking != "None":
     print(f"Ranking energies with method: {args.ranking}. Model will not be point cloud based.")
     if args.ranking == "Linear":
-        energies = np.linspace(0.1, 20, num_systems)
+        energies = np.linspace(0.1, 5, num_systems)
     elif args.ranking == "Logit":
         energies = logit(np.linspace(-1., 1., num_systems))
     elif args.ranking == "Sigmoid":
         energies = sigmoid(np.linspace(0.1, 0.9, num_systems))
+    elif args.ranking == "Step":
+        step = num_systems
+        energies = np.array([1.]*step + [2.]*step, dtype=np.float64)  # Simulated energies for testing purposes
 else:
     energies = np.zeros(num_systems)
     for idx in tqdm(range(num_systems)):
         points = finite_point_cloud(10.0, num_particles)
         energies[idx] = potential_energy(points, choice = args.potential, cutoff=10, onebody=0., two_body_init=1., two_body_decay=-2., show_potential=False)/num_particles
-#     None
-
-energies = np.array([1.] + [2.]*1000 + [3.]*1000 + [4.]*1000 + [5.] * 1000 + [6.])  # Simulated energies for testing purposes
-#energies = [1,2,3,4,5,6,7,8,9,10,10,10,10,10,10,10,10,10,10,10,11,12,13,14,15,16,17,18,19,20,20,20,20,20,20,20,20,20,20,20,20,20,21,22,23,24,25,26,27,28,29,30,30,30,30,30,30,30,30,30,30,30,31,32,33,34,35,36,37,38,39,40,40,40,40,40,40,40,40,40,40,40,41,42,43,44,45,46,47,48,49,50]
-energies = np.array(energies, dtype=np.float64)  # Convert to numpy array for numerical operations
 
 # Define a range of temperatures for the simulation
-T = np.linspace(0.1, max_temp, 50000)
+T = np.linspace(0.1, max_temp, 5000)
 Cv = np.zeros(len(T))
 
 for idx, t in tqdm(enumerate(T), desc="Calculating heat capacity", total=len(T)):
-    Z, P = canonical_partition_function(energies, temperature=t)
+    Z, P = canonical_partition_function(energies+0.0001, temperature=t)
     Cv[idx] = canonical_heat_capacity(energies, P, temperature=t)
 
 fig = plt.figure()
@@ -220,18 +218,19 @@ fig = plt.figure()
 ax = fig.add_subplot(211)
 ax.plot(T, Cv, label='Heat Capacity')
 # ax.hlines(k_B, 0, max_temp, colors='red', linestyles='dashed')
+ax.set_ylim(0, np.max(Cv) * 1.1)
 ax.set_xlabel('Temperature (K)')
 ax.set_ylabel('Heat Capacity (ev / K / particle)')
-ax.set_title('Canonical Heat Capacity vs Temperature')
+# ax.set_title('Canonical Heat Capacity vs Temperature')
 #ax.set_yscale('log')
 # ax.set_ylim(-10, np.max(Cv) * 1.1)
 
 ax2 = fig.add_subplot(212)
-ax2.plot(np.arange(len(energies)), np.sort(energies), label='Heat Capacity', color='orange')
+ax2.plot(np.arange(len(energies)), np.sort(energies), color='orange')
 ax2.set_xlabel('Ranking')
 ax2.set_ylabel('Energy (eV) per particle')
 
-fig.suptitle(f'Canonical Heat Capacity and Energy Distribution\nPotential: {args.potential}')
+# fig.suptitle(f'Canonical Heat Capacity and Energy Distribution\nPotential: {args.potential}')
 fig.tight_layout()
 fig.savefig('heat_capacity.pdf', dpi=300, bbox_inches='tight')
 plt.show()
